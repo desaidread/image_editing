@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { decodeGb7, encodeGb7 } from "../lib/gb7";
+import { decodeGb7, encodeGb7, getGb7Info } from "../lib/gb7";
 
 export interface ImageMeta {
   width: number;
@@ -7,6 +7,7 @@ export interface ImageMeta {
   colorDepth: number;
   fileName: string;
   format: "png" | "jpg" | "gb7" | null;
+  hasMask: boolean | null;
 }
 
 export interface ImageStore {
@@ -25,6 +26,7 @@ const defaultMeta: ImageMeta = {
   colorDepth: 0,
   fileName: "",
   format: null,
+  hasMask: null,
 };
 
 export function useImageStore() {
@@ -40,14 +42,16 @@ export function useImageStore() {
     try {
       if (ext === "gb7") {
         const buf = await file.arrayBuffer();
+        const info = getGb7Info(buf);
         const data = decodeGb7(buf);
         setImageData(data);
         setMeta({
           width: data.width,
           height: data.height,
-          colorDepth: 7,
+          colorDepth: info.hasMask ? 8 : 7,
           fileName: file.name,
           format: "gb7",
+          hasMask: info.hasMask,
         });
       } else {
         const url = URL.createObjectURL(file);
@@ -65,13 +69,16 @@ export function useImageStore() {
         const ctx = offscreen.getContext("2d")!;
         ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
+        const isJpeg = ext === "jpg" || ext === "jpeg";
+        const transparent = !isJpeg && hasTransparency(data.data);
         setImageData(data);
         setMeta({
           width: img.naturalWidth,
           height: img.naturalHeight,
-          colorDepth: ext === "jpg" || ext === "jpeg" ? 24 : 32,
+          colorDepth: isJpeg ? 24 : transparent ? 32 : 24,
           fileName: file.name,
-          format: ext === "jpg" || ext === "jpeg" ? "jpg" : "png",
+          format: isJpeg ? "jpg" : "png",
+          hasMask: isJpeg ? null : transparent,
         });
       }
     } catch (e) {
@@ -106,6 +113,13 @@ export function useImageStore() {
   );
 
   return { imageData, meta, error, loadFile, downloadAs, setCanvasRef };
+}
+
+function hasTransparency(data: Uint8ClampedArray): boolean {
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true;
+  }
+  return false;
 }
 
 function triggerDownload(url: string, fileName: string) {

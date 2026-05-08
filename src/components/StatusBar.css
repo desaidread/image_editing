@@ -31,3 +31,12 @@
   background: var(--border);
   flex-shrink: 0;
 }
+
+.status-mask-yes {
+  color: #5fba7d;
+}
+
+.status-mask-no {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}

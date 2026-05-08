@@ -6,7 +6,7 @@ interface Props {
 }
 
 export default function StatusBar({ meta }: Props) {
-  const { width, height, colorDepth, fileName, format } = meta;
+  const { width, height, colorDepth, fileName, format, hasMask } = meta;
 
   if (!format) {
     return (
@@ -17,6 +17,7 @@ export default function StatusBar({ meta }: Props) {
   }
 
   const formatLabel = format.toUpperCase();
+  const maskLabel = format === "gb7" ? "Маска" : "Прозрачность";
 
   return (
     <div className="status-bar">
@@ -33,6 +34,17 @@ export default function StatusBar({ meta }: Props) {
       <span className="status-item">
         <span className="status-key">Формат:</span> {formatLabel}
       </span>
+      {hasMask !== null && (
+        <>
+          <span className="status-sep" />
+          <span className="status-item">
+            <span className="status-key">{maskLabel}:</span>{" "}
+            <span className={hasMask ? "status-mask-yes" : "status-mask-no"}>
+              {hasMask ? "есть" : "нет"}
+            </span>
+          </span>
+        </>
+      )}
     </div>
   );
 }
