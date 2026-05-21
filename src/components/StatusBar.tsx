@@ -1,11 +1,13 @@
 import "./StatusBar.css";
-import type { ImageMeta } from "../hooks/useImageStore";
+import type { ImageMeta, PickedPixel } from "../hooks/useImageStore";
+import { rgbToLab } from "../lib/colorUtils";
 
 interface Props {
   meta: ImageMeta;
+  pickedPixel: PickedPixel | null;
 }
 
-export default function StatusBar({ meta }: Props) {
+export default function StatusBar({ meta, pickedPixel }: Props) {
   const { width, height, colorDepth, fileName, format, hasMask } = meta;
 
   if (!format) {
@@ -18,6 +20,39 @@ export default function StatusBar({ meta }: Props) {
 
   const formatLabel = format.toUpperCase();
   const maskLabel = format === "gb7" ? "Маска" : "Прозрачность";
+
+  let labSection: React.ReactNode = null;
+  if (pickedPixel) {
+    const [L, a, b] = rgbToLab(pickedPixel.r, pickedPixel.g, pickedPixel.b);
+    labSection = (
+      <>
+        <span className="status-sep" />
+        <span className="status-item status-pixel">
+          <span className="status-key">Пиксель</span>{" "}
+          ({pickedPixel.x}, {pickedPixel.y})
+        </span>
+        <span className="status-sep" />
+        <span className="status-item">
+          <span className="status-key">RGB:</span>{" "}
+          <span className="status-r">{pickedPixel.r}</span>{" "}
+          <span className="status-g">{pickedPixel.g}</span>{" "}
+          <span className="status-b">{pickedPixel.b}</span>
+        </span>
+        <span className="status-sep" />
+        <span className="status-item">
+          <span className="status-key">LAB:</span>{" "}
+          L*{L.toFixed(1)} a*{a.toFixed(1)} b*{b.toFixed(1)}
+        </span>
+        <span className="status-sep" />
+        <span className="status-item">
+          <span
+            className="status-swatch"
+            style={{ background: `rgb(${pickedPixel.r},${pickedPixel.g},${pickedPixel.b})` }}
+          />
+        </span>
+      </>
+    );
+  }
 
   return (
     <div className="status-bar">
@@ -45,6 +80,7 @@ export default function StatusBar({ meta }: Props) {
           </span>
         </>
       )}
+      {labSection}
     </div>
   );
 }

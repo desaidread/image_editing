@@ -40,3 +40,20 @@
   color: var(--text-secondary);
   opacity: 0.6;
 }
+
+.status-pixel {
+  font-weight: 500;
+}
+
+.status-r { color: #e06c75; font-weight: 600; }
+.status-g { color: #98c379; font-weight: 600; }
+.status-b { color: #61afef; font-weight: 600; }
+
+.status-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(255,255,255,0.25);
+  vertical-align: middle;
+}
