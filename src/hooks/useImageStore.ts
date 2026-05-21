@@ -10,6 +10,17 @@ export interface ImageMeta {
   hasMask: boolean | null;
 }
 
+export type ActiveTool = "none" | "eyedropper";
+
+export interface PickedPixel {
+  x: number;
+  y: number;
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
 export interface ImageStore {
   imageData: ImageData | null;
   meta: ImageMeta;
@@ -18,6 +29,13 @@ export interface ImageStore {
   downloadAs: (format: "png" | "jpg" | "gb7") => void;
   canvasRef: React.RefObject<HTMLCanvasElement | null> | null;
   setCanvasRef: (ref: React.RefObject<HTMLCanvasElement | null>) => void;
+  channelCount: number;
+  activeChannels: boolean[];
+  activeTool: ActiveTool;
+  pickedPixel: PickedPixel | null;
+  toggleChannel: (index: number) => void;
+  setActiveTool: (tool: ActiveTool) => void;
+  pickPixel: (x: number, y: number) => void;
 }
 
 const defaultMeta: ImageMeta = {
@@ -29,30 +47,41 @@ const defaultMeta: ImageMeta = {
   hasMask: null,
 };
 
+function getChannelCount(meta: ImageMeta): number {
+  if (!meta.format) return 0;
+  if (meta.format === "gb7") return meta.hasMask ? 2 : 1;
+  return meta.hasMask === true ? 4 : 3;
+}
+
 export function useImageStore() {
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [meta, setMeta] = useState<ImageMeta>(defaultMeta);
   const [error, setError] = useState<string | null>(null);
   const [canvasRef, setCanvasRef] = useState<React.RefObject<HTMLCanvasElement | null> | null>(null);
+  const [activeChannels, setActiveChannels] = useState<boolean[]>([]);
+  const [activeTool, setActiveTool] = useState<ActiveTool>("none");
+  const [pickedPixel, setPickedPixel] = useState<PickedPixel | null>(null);
 
   const loadFile = useCallback(async (file: File) => {
     setError(null);
     const ext = file.name.split(".").pop()?.toLowerCase();
 
     try {
+      let newMeta: ImageMeta;
+      let data: ImageData;
+
       if (ext === "gb7") {
         const buf = await file.arrayBuffer();
         const info = getGb7Info(buf);
-        const data = decodeGb7(buf);
-        setImageData(data);
-        setMeta({
+        data = decodeGb7(buf);
+        newMeta = {
           width: data.width,
           height: data.height,
           colorDepth: info.hasMask ? 8 : 7,
           fileName: file.name,
           format: "gb7",
           hasMask: info.hasMask,
-        });
+        };
       } else {
         const url = URL.createObjectURL(file);
         const img = new Image();
@@ -68,19 +97,25 @@ export function useImageStore() {
         offscreen.height = img.naturalHeight;
         const ctx = offscreen.getContext("2d")!;
         ctx.drawImage(img, 0, 0);
-        const data = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
+        data = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
         const isJpeg = ext === "jpg" || ext === "jpeg";
         const transparent = !isJpeg && hasTransparency(data.data);
-        setImageData(data);
-        setMeta({
+        newMeta = {
           width: img.naturalWidth,
           height: img.naturalHeight,
           colorDepth: isJpeg ? 24 : transparent ? 32 : 24,
           fileName: file.name,
           format: isJpeg ? "jpg" : "png",
           hasMask: isJpeg ? null : transparent,
-        });
+        };
       }
+
+      const count = getChannelCount(newMeta);
+      setImageData(data);
+      setMeta(newMeta);
+      setActiveChannels(new Array(count).fill(true));
+      setActiveTool("none");
+      setPickedPixel(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -112,7 +147,43 @@ export function useImageStore() {
     [imageData, canvasRef, meta.fileName]
   );
 
-  return { imageData, meta, error, loadFile, downloadAs, setCanvasRef };
+  const toggleChannel = useCallback((index: number) => {
+    setActiveChannels((prev) => prev.map((v, i) => (i === index ? !v : v)));
+  }, []);
+
+  const pickPixel = useCallback(
+    (x: number, y: number) => {
+      if (!imageData) return;
+      const idx = (y * imageData.width + x) * 4;
+      setPickedPixel({
+        x,
+        y,
+        r: imageData.data[idx],
+        g: imageData.data[idx + 1],
+        b: imageData.data[idx + 2],
+        a: imageData.data[idx + 3],
+      });
+    },
+    [imageData]
+  );
+
+  const channelCount = getChannelCount(meta);
+
+  return {
+    imageData,
+    meta,
+    error,
+    loadFile,
+    downloadAs,
+    setCanvasRef,
+    channelCount,
+    activeChannels,
+    activeTool,
+    pickedPixel,
+    toggleChannel,
+    setActiveTool,
+    pickPixel,
+  };
 }
 
 function hasTransparency(data: Uint8ClampedArray): boolean {
