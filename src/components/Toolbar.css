@@ -90,6 +90,28 @@
   color: var(--text-muted);
 }
 
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.btn-tool {
+  background: var(--bg-button);
+  color: var(--text-primary);
+}
+
+.btn-tool:hover:not(:disabled) {
+  background: var(--bg-button-hover);
+}
+
+.btn-tool-active {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+}
+
 .error-badge {
   background: #c0392b;
   color: #fff;

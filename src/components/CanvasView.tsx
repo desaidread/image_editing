@@ -1,12 +1,24 @@
 import { useRef, useEffect } from "react";
+import type { ActiveTool } from "../hooks/useImageStore";
 import "./CanvasView.css";
 
 interface Props {
   imageData: ImageData | null;
+  activeChannels: boolean[];
+  channelCount: number;
+  activeTool: ActiveTool;
   onCanvasReady: (ref: React.RefObject<HTMLCanvasElement | null>) => void;
+  onPixelPick: (x: number, y: number) => void;
 }
 
-export default function CanvasView({ imageData, onCanvasReady }: Props) {
+export default function CanvasView({
+  imageData,
+  activeChannels,
+  channelCount,
+  activeTool,
+  onCanvasReady,
+  onPixelPick,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -20,13 +32,34 @@ export default function CanvasView({ imageData, onCanvasReady }: Props) {
     canvas.width = imageData.width;
     canvas.height = imageData.height;
     const ctx = canvas.getContext("2d")!;
-    ctx.putImageData(imageData, 0, 0);
-  }, [imageData]);
+
+    if (activeChannels.length === 0 || activeChannels.every(Boolean)) {
+      ctx.putImageData(imageData, 0, 0);
+    } else {
+      ctx.putImageData(applyChannelMask(imageData, activeChannels, channelCount), 0, 0);
+    }
+  }, [imageData, activeChannels, channelCount]);
+
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (activeTool !== "eyedropper") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((e.clientX - rect.left) * scaleX)));
+    const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((e.clientY - rect.top) * scaleY)));
+    onPixelPick(x, y);
+  };
 
   return (
     <div className="canvas-wrapper">
       {imageData ? (
-        <canvas ref={canvasRef} className="main-canvas" />
+        <canvas
+          ref={canvasRef}
+          className={`main-canvas${activeTool === "eyedropper" ? " cursor-eyedropper" : ""}`}
+          onClick={handleClick}
+        />
       ) : (
         <div className="canvas-placeholder">
           <div className="placeholder-content">
@@ -42,4 +75,40 @@ export default function CanvasView({ imageData, onCanvasReady }: Props) {
       )}
     </div>
   );
+}
+
+function applyChannelMask(src: ImageData, activeChannels: boolean[], channelCount: number): ImageData {
+  const data = src.data;
+  const out = new Uint8ClampedArray(data.length);
+
+  // Special case: only alpha channel active in RGBA image → show as grayscale mask
+  const onlyAlpha =
+    channelCount === 4 &&
+    !activeChannels[0] &&
+    !activeChannels[1] &&
+    !activeChannels[2] &&
+    activeChannels[3];
+
+  for (let i = 0; i < data.length; i += 4) {
+    if (channelCount === 1) {
+      const v = activeChannels[0] ? data[i] : 0;
+      out[i] = out[i + 1] = out[i + 2] = v;
+      out[i + 3] = 255;
+    } else if (channelCount === 2) {
+      const v = activeChannels[0] ? data[i] : 0;
+      out[i] = out[i + 1] = out[i + 2] = v;
+      out[i + 3] = activeChannels[1] ? data[i + 3] : 255;
+    } else if (onlyAlpha) {
+      const a = data[i + 3];
+      out[i] = out[i + 1] = out[i + 2] = a;
+      out[i + 3] = 255;
+    } else {
+      out[i] = activeChannels[0] ? data[i] : 0;
+      out[i + 1] = activeChannels[1] ? data[i + 1] : 0;
+      out[i + 2] = activeChannels[2] ? data[i + 2] : 0;
+      out[i + 3] = channelCount === 4 && activeChannels[3] ? data[i + 3] : 255;
+    }
+  }
+
+  return new ImageData(out, src.width, src.height);
 }
