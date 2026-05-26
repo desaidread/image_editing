@@ -21,30 +21,8 @@ export interface PickedPixel {
   a: number;
 }
 
-export interface ImageStore {
-  imageData: ImageData | null;
-  meta: ImageMeta;
-  error: string | null;
-  loadFile: (file: File) => Promise<void>;
-  downloadAs: (format: "png" | "jpg" | "gb7") => void;
-  canvasRef: React.RefObject<HTMLCanvasElement | null> | null;
-  setCanvasRef: (ref: React.RefObject<HTMLCanvasElement | null>) => void;
-  channelCount: number;
-  activeChannels: boolean[];
-  activeTool: ActiveTool;
-  pickedPixel: PickedPixel | null;
-  toggleChannel: (index: number) => void;
-  setActiveTool: (tool: ActiveTool) => void;
-  pickPixel: (x: number, y: number) => void;
-}
-
 const defaultMeta: ImageMeta = {
-  width: 0,
-  height: 0,
-  colorDepth: 0,
-  fileName: "",
-  format: null,
-  hasMask: null,
+  width: 0, height: 0, colorDepth: 0, fileName: "", format: null, hasMask: null,
 };
 
 function getChannelCount(meta: ImageMeta): number {
@@ -58,14 +36,19 @@ export function useImageStore() {
   const [meta, setMeta] = useState<ImageMeta>(defaultMeta);
   const [error, setError] = useState<string | null>(null);
   const [canvasRef, setCanvasRef] = useState<React.RefObject<HTMLCanvasElement | null> | null>(null);
+
+  // Lab 2
   const [activeChannels, setActiveChannels] = useState<boolean[]>([]);
   const [activeTool, setActiveTool] = useState<ActiveTool>("none");
   const [pickedPixel, setPickedPixel] = useState<PickedPixel | null>(null);
 
+  // Lab 3
+  const [previewImageData, setPreviewImageData] = useState<ImageData | null>(null);
+  const [levelsOpen, setLevelsOpen] = useState(false);
+
   const loadFile = useCallback(async (file: File) => {
     setError(null);
     const ext = file.name.split(".").pop()?.toLowerCase();
-
     try {
       let newMeta: ImageMeta;
       let data: ImageData;
@@ -75,12 +58,9 @@ export function useImageStore() {
         const info = getGb7Info(buf);
         data = decodeGb7(buf);
         newMeta = {
-          width: data.width,
-          height: data.height,
+          width: data.width, height: data.height,
           colorDepth: info.hasMask ? 8 : 7,
-          fileName: file.name,
-          format: "gb7",
-          hasMask: info.hasMask,
+          fileName: file.name, format: "gb7", hasMask: info.hasMask,
         };
       } else {
         const url = URL.createObjectURL(file);
@@ -91,7 +71,6 @@ export function useImageStore() {
           img.src = url;
         });
         URL.revokeObjectURL(url);
-
         const offscreen = document.createElement("canvas");
         offscreen.width = img.naturalWidth;
         offscreen.height = img.naturalHeight;
@@ -101,11 +80,9 @@ export function useImageStore() {
         const isJpeg = ext === "jpg" || ext === "jpeg";
         const transparent = !isJpeg && hasTransparency(data.data);
         newMeta = {
-          width: img.naturalWidth,
-          height: img.naturalHeight,
+          width: img.naturalWidth, height: img.naturalHeight,
           colorDepth: isJpeg ? 24 : transparent ? 32 : 24,
-          fileName: file.name,
-          format: isJpeg ? "jpg" : "png",
+          fileName: file.name, format: isJpeg ? "jpg" : "png",
           hasMask: isJpeg ? null : transparent,
         };
       }
@@ -116,6 +93,8 @@ export function useImageStore() {
       setActiveChannels(new Array(count).fill(true));
       setActiveTool("none");
       setPickedPixel(null);
+      setPreviewImageData(null);
+      setLevelsOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -124,23 +103,17 @@ export function useImageStore() {
   const downloadAs = useCallback(
     (format: "png" | "jpg" | "gb7") => {
       if (!imageData || !canvasRef?.current) return;
-
       const canvas = canvasRef.current;
       const baseName = meta.fileName.replace(/\.[^.]+$/, "") || "image";
-
       if (format === "gb7") {
         const bytes = encodeGb7(imageData);
         const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "application/octet-stream" });
         triggerDownload(URL.createObjectURL(blob), `${baseName}.gb7`);
       } else {
         const mimeType = format === "jpg" ? "image/jpeg" : "image/png";
-        const ext = format === "jpg" ? "jpg" : "png";
         canvas.toBlob(
-          (blob) => {
-            if (blob) triggerDownload(URL.createObjectURL(blob), `${baseName}.${ext}`);
-          },
-          mimeType,
-          format === "jpg" ? 0.92 : undefined
+          (blob) => { if (blob) triggerDownload(URL.createObjectURL(blob), `${baseName}.${format}`); },
+          mimeType, format === "jpg" ? 0.92 : undefined
         );
       }
     },
@@ -151,52 +124,50 @@ export function useImageStore() {
     setActiveChannels((prev) => prev.map((v, i) => (i === index ? !v : v)));
   }, []);
 
-  const pickPixel = useCallback(
-    (x: number, y: number) => {
-      if (!imageData) return;
-      const idx = (y * imageData.width + x) * 4;
-      setPickedPixel({
-        x,
-        y,
-        r: imageData.data[idx],
-        g: imageData.data[idx + 1],
-        b: imageData.data[idx + 2],
-        a: imageData.data[idx + 3],
-      });
-    },
-    [imageData]
-  );
+  const pickPixel = useCallback((x: number, y: number) => {
+    if (!imageData) return;
+    const idx = (y * imageData.width + x) * 4;
+    setPickedPixel({
+      x, y,
+      r: imageData.data[idx],
+      g: imageData.data[idx + 1],
+      b: imageData.data[idx + 2],
+      a: imageData.data[idx + 3],
+    });
+  }, [imageData]);
+
+  const openLevels = useCallback(() => setLevelsOpen(true), []);
+
+  const closeLevels = useCallback(() => {
+    setLevelsOpen(false);
+    setPreviewImageData(null);
+  }, []);
+
+  const commitLevels = useCallback((newData: ImageData) => {
+    setImageData(newData);
+    setPreviewImageData(null);
+    setLevelsOpen(false);
+    setPickedPixel(null);
+  }, []);
 
   const channelCount = getChannelCount(meta);
 
   return {
-    imageData,
-    meta,
-    error,
-    loadFile,
-    downloadAs,
-    setCanvasRef,
-    channelCount,
-    activeChannels,
-    activeTool,
-    pickedPixel,
-    toggleChannel,
-    setActiveTool,
-    pickPixel,
+    imageData, meta, error, loadFile, downloadAs, setCanvasRef,
+    channelCount, activeChannels, activeTool, pickedPixel,
+    toggleChannel, setActiveTool, pickPixel,
+    previewImageData, setPreviewImageData,
+    levelsOpen, openLevels, closeLevels, commitLevels,
   };
 }
 
 function hasTransparency(data: Uint8ClampedArray): boolean {
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] < 255) return true;
-  }
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true;
   return false;
 }
 
 function triggerDownload(url: string, fileName: string) {
   const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
+  a.href = url; a.download = fileName; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -4,6 +4,7 @@ import "./CanvasView.css";
 
 interface Props {
   imageData: ImageData | null;
+  previewImageData: ImageData | null;
   activeChannels: boolean[];
   channelCount: number;
   activeTool: ActiveTool;
@@ -13,6 +14,7 @@ interface Props {
 
 export default function CanvasView({
   imageData,
+  previewImageData,
   activeChannels,
   channelCount,
   activeTool,
@@ -27,18 +29,19 @@ export default function CanvasView({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !imageData) return;
+    const base = previewImageData ?? imageData;
+    if (!canvas || !base) return;
 
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
+    canvas.width = base.width;
+    canvas.height = base.height;
     const ctx = canvas.getContext("2d")!;
 
     if (activeChannels.length === 0 || activeChannels.every(Boolean)) {
-      ctx.putImageData(imageData, 0, 0);
+      ctx.putImageData(base, 0, 0);
     } else {
-      ctx.putImageData(applyChannelMask(imageData, activeChannels, channelCount), 0, 0);
+      ctx.putImageData(applyChannelMask(base, activeChannels, channelCount), 0, 0);
     }
-  }, [imageData, activeChannels, channelCount]);
+  }, [imageData, previewImageData, activeChannels, channelCount]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (activeTool !== "eyedropper") return;
@@ -80,14 +83,9 @@ export default function CanvasView({
 function applyChannelMask(src: ImageData, activeChannels: boolean[], channelCount: number): ImageData {
   const data = src.data;
   const out = new Uint8ClampedArray(data.length);
-
-  // Special case: only alpha channel active in RGBA image → show as grayscale mask
   const onlyAlpha =
     channelCount === 4 &&
-    !activeChannels[0] &&
-    !activeChannels[1] &&
-    !activeChannels[2] &&
-    activeChannels[3];
+    !activeChannels[0] && !activeChannels[1] && !activeChannels[2] && activeChannels[3];
 
   for (let i = 0; i < data.length; i += 4) {
     if (channelCount === 1) {
@@ -103,12 +101,11 @@ function applyChannelMask(src: ImageData, activeChannels: boolean[], channelCoun
       out[i] = out[i + 1] = out[i + 2] = a;
       out[i + 3] = 255;
     } else {
-      out[i] = activeChannels[0] ? data[i] : 0;
+      out[i]     = activeChannels[0] ? data[i] : 0;
       out[i + 1] = activeChannels[1] ? data[i + 1] : 0;
       out[i + 2] = activeChannels[2] ? data[i + 2] : 0;
       out[i + 3] = channelCount === 4 && activeChannels[3] ? data[i + 3] : 255;
     }
   }
-
   return new ImageData(out, src.width, src.height);
 }

@@ -3,30 +3,21 @@ import Toolbar from "./components/Toolbar";
 import CanvasView from "./components/CanvasView";
 import StatusBar from "./components/StatusBar";
 import ChannelsPanel from "./components/ChannelsPanel";
+import LevelsDialog from "./components/LevelsDialog";
 import { useImageStore } from "./hooks/useImageStore";
 import "./App.css";
 
 export default function App() {
   const {
-    imageData,
-    meta,
-    error,
-    loadFile,
-    downloadAs,
-    setCanvasRef,
-    channelCount,
-    activeChannels,
-    activeTool,
-    pickedPixel,
-    toggleChannel,
-    setActiveTool,
-    pickPixel,
+    imageData, meta, error, loadFile, downloadAs, setCanvasRef,
+    channelCount, activeChannels, activeTool, pickedPixel,
+    toggleChannel, setActiveTool, pickPixel,
+    previewImageData, setPreviewImageData,
+    levelsOpen, openLevels, closeLevels, commitLevels,
   } = useImageStore();
 
   const handleCanvasReady = useCallback(
-    (ref: React.RefObject<HTMLCanvasElement | null>) => {
-      setCanvasRef(ref);
-    },
+    (ref: React.RefObject<HTMLCanvasElement | null>) => setCanvasRef(ref),
     [setCanvasRef]
   );
 
@@ -39,6 +30,7 @@ export default function App() {
         error={error}
         activeTool={activeTool}
         onToolChange={setActiveTool}
+        onOpenLevels={openLevels}
       />
       <div className="app-main">
         <ChannelsPanel
@@ -49,6 +41,7 @@ export default function App() {
         />
         <CanvasView
           imageData={imageData}
+          previewImageData={previewImageData}
           activeChannels={activeChannels}
           channelCount={channelCount}
           activeTool={activeTool}
@@ -57,6 +50,16 @@ export default function App() {
         />
       </div>
       <StatusBar meta={meta} pickedPixel={pickedPixel} />
+
+      {levelsOpen && imageData && (
+        <LevelsDialog
+          imageData={imageData}
+          channelCount={channelCount}
+          onApply={commitLevels}
+          onPreview={setPreviewImageData}
+          onClose={closeLevels}
+        />
+      )}
     </div>
   );
 }
