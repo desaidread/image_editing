@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { ActiveTool } from "../hooks/useImageStore";
+import { ZOOM_LEVELS } from "../lib/interpolation";
 import "./Toolbar.css";
 
 interface Props {
@@ -10,10 +11,17 @@ interface Props {
   activeTool: ActiveTool;
   onToolChange: (tool: ActiveTool) => void;
   onOpenLevels: () => void;
+  viewScale: number;
+  onViewScaleChange: (scale: number) => void;
+  onOpenResize: () => void;
 }
 
 export default function Toolbar({
-  hasImage, onLoad, onDownload, error, activeTool, onToolChange, onOpenLevels,
+  hasImage, onLoad, onDownload, error,
+  activeTool, onToolChange,
+  onOpenLevels,
+  viewScale, onViewScaleChange,
+  onOpenResize,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,6 +35,8 @@ export default function Toolbar({
     const file = e.dataTransfer.files[0];
     if (file) onLoad(file);
   };
+
+  const scalePct = Math.round(viewScale * 100);
 
   return (
     <div className="toolbar" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
@@ -60,6 +70,31 @@ export default function Toolbar({
         >
           <IconLevels /> Уровни
         </button>
+
+        <button
+          className="btn btn-tool"
+          disabled={!hasImage}
+          onClick={onOpenResize}
+          title="Изменить размер изображения"
+        >
+          <IconResize /> Размер
+        </button>
+
+        <div className="toolbar-sep" />
+
+        <div className="zoom-group">
+          <label className="label">Масштаб:</label>
+          <select
+            className="zoom-select"
+            value={scalePct}
+            disabled={!hasImage}
+            onChange={(e) => onViewScaleChange(parseInt(e.target.value) / 100)}
+          >
+            {ZOOM_LEVELS.map(pct => (
+              <option key={pct} value={pct}>{pct}%</option>
+            ))}
+          </select>
+        </div>
 
         {error && <span className="error-badge" title={error}>Ошибка!</span>}
       </div>
@@ -100,6 +135,16 @@ function IconLevels() {
       <rect x="5" y="6"  width="3" height="9" fill="currentColor" opacity="0.7"/>
       <rect x="9" y="3"  width="3" height="12" fill="currentColor"/>
       <rect x="13" y="7" width="3" height="8" fill="currentColor" opacity="0.6"/>
+    </svg>
+  );
+}
+
+function IconResize() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="1" y="1" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="7" y="7" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/>
+      <path d="M9 4h3M12 4v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   );
 }

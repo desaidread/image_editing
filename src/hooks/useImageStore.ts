@@ -46,6 +46,10 @@ export function useImageStore() {
   const [previewImageData, setPreviewImageData] = useState<ImageData | null>(null);
   const [levelsOpen, setLevelsOpen] = useState(false);
 
+  // Lab 4
+  const [viewScale, setViewScale] = useState(1.0);
+  const [resizeOpen, setResizeOpen] = useState(false);
+
   const loadFile = useCallback(async (file: File) => {
     setError(null);
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -95,6 +99,7 @@ export function useImageStore() {
       setPickedPixel(null);
       setPreviewImageData(null);
       setLevelsOpen(false);
+      setViewScale(1.0);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -150,6 +155,16 @@ export function useImageStore() {
     setPickedPixel(null);
   }, []);
 
+  const openResize = useCallback(() => setResizeOpen(true), []);
+  const closeResize = useCallback(() => setResizeOpen(false), []);
+  const commitResize = useCallback((newData: ImageData) => {
+    setImageData(newData);
+    setMeta(prev => ({ ...prev, width: newData.width, height: newData.height }));
+    setPreviewImageData(null);
+    setPickedPixel(null);
+    setResizeOpen(false);
+  }, []);
+
   const channelCount = getChannelCount(meta);
 
   return {
@@ -158,6 +173,8 @@ export function useImageStore() {
     toggleChannel, setActiveTool, pickPixel,
     previewImageData, setPreviewImageData,
     levelsOpen, openLevels, closeLevels, commitLevels,
+    viewScale, setViewScale,
+    resizeOpen, openResize, closeResize, commitResize,
   };
 }
 

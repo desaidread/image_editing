@@ -119,3 +119,29 @@
   padding: 2px 8px;
   border-radius: 3px;
 }
+
+.zoom-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoom-select {
+  background: var(--bg-button);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 72px;
+}
+
+.zoom-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.zoom-select:not(:disabled):hover {
+  background: var(--bg-button-hover);
+}

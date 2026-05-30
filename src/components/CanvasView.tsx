@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import type { ActiveTool } from "../hooks/useImageStore";
+import { resizeImageData, ZOOM_LEVELS } from "../lib/interpolation";
 import "./CanvasView.css";
 
 interface Props {
@@ -8,8 +9,10 @@ interface Props {
   activeChannels: boolean[];
   channelCount: number;
   activeTool: ActiveTool;
+  viewScale: number;
   onCanvasReady: (ref: React.RefObject<HTMLCanvasElement | null>) => void;
   onPixelPick: (x: number, y: number) => void;
+  onAutoFit: (scale: number) => void;
 }
 
 export default function CanvasView({
@@ -18,45 +21,76 @@ export default function CanvasView({
   activeChannels,
   channelCount,
   activeTool,
+  viewScale,
   onCanvasReady,
   onPixelPick,
+  onAutoFit,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     onCanvasReady(canvasRef);
   }, [onCanvasReady]);
 
+  // Auto-fit when a new image loads
+  useEffect(() => {
+    if (!imageData || !wrapperRef.current) return;
+    const wrapper = wrapperRef.current;
+    // padding is 24px each side; require ≥50px margin beyond padding
+    const availW = wrapper.clientWidth - 48 - 50;
+    const availH = wrapper.clientHeight - 48 - 50;
+    const ideal = Math.min(availW / imageData.width, availH / imageData.height);
+    // largest preset zoom level that fits
+    const fit = [...ZOOM_LEVELS]
+      .slice()
+      .reverse()
+      .find(pct => pct / 100 <= ideal) ?? ZOOM_LEVELS[0];
+    onAutoFit(fit / 100);
+  }, [imageData, onAutoFit]);
+
+  // Render: scale image with our interpolation, draw on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     const base = previewImageData ?? imageData;
     if (!canvas || !base) return;
 
-    canvas.width = base.width;
-    canvas.height = base.height;
-    const ctx = canvas.getContext("2d")!;
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const masked =
+        activeChannels.length === 0 || activeChannels.every(Boolean)
+          ? base
+          : applyChannelMask(base, activeChannels, channelCount);
 
-    if (activeChannels.length === 0 || activeChannels.every(Boolean)) {
-      ctx.putImageData(base, 0, 0);
-    } else {
-      ctx.putImageData(applyChannelMask(base, activeChannels, channelCount), 0, 0);
-    }
-  }, [imageData, previewImageData, activeChannels, channelCount]);
+      const scaledW = Math.max(1, Math.round(masked.width * viewScale));
+      const scaledH = Math.max(1, Math.round(masked.height * viewScale));
+      const scaled = resizeImageData(masked, scaledW, scaledH, "bilinear");
+
+      canvas.width = scaledW;
+      canvas.height = scaledH;
+      canvas.getContext("2d")!.putImageData(scaled, 0, 0);
+    });
+
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [imageData, previewImageData, activeChannels, channelCount, viewScale]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeTool !== "eyedropper") return;
+    if (activeTool !== "eyedropper" || !imageData) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((e.clientX - rect.left) * scaleX)));
-    const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((e.clientY - rect.top) * scaleY)));
-    onPixelPick(x, y);
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top) * scaleY;
+    const imgX = Math.max(0, Math.min(imageData.width - 1, Math.floor(cx / viewScale)));
+    const imgY = Math.max(0, Math.min(imageData.height - 1, Math.floor(cy / viewScale)));
+    onPixelPick(imgX, imgY);
   };
 
   return (
-    <div className="canvas-wrapper">
+    <div className="canvas-wrapper" ref={wrapperRef}>
       {imageData ? (
         <canvas
           ref={canvasRef}
