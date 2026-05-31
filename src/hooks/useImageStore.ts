@@ -155,6 +155,19 @@ export function useImageStore() {
     setPickedPixel(null);
   }, []);
 
+  const [kernelOpen, setKernelOpen] = useState(false);
+  const openKernel = useCallback(() => setKernelOpen(true), []);
+  const closeKernel = useCallback(() => {
+    setKernelOpen(false);
+    setPreviewImageData(null);
+  }, []);
+  const commitKernel = useCallback((newData: ImageData) => {
+    setImageData(newData);
+    setPreviewImageData(null);
+    setPickedPixel(null);
+    setKernelOpen(false);
+  }, []);
+
   const openResize = useCallback(() => setResizeOpen(true), []);
   const closeResize = useCallback(() => setResizeOpen(false), []);
   const commitResize = useCallback((newData: ImageData) => {
@@ -175,6 +188,7 @@ export function useImageStore() {
     levelsOpen, openLevels, closeLevels, commitLevels,
     viewScale, setViewScale,
     resizeOpen, openResize, closeResize, commitResize,
+    kernelOpen, openKernel, closeKernel, commitKernel,
   };
 }
 

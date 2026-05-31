@@ -14,6 +14,7 @@ interface Props {
   viewScale: number;
   onViewScaleChange: (scale: number) => void;
   onOpenResize: () => void;
+  onOpenKernel: () => void;
 }
 
 export default function Toolbar({
@@ -22,6 +23,7 @@ export default function Toolbar({
   onOpenLevels,
   viewScale, onViewScaleChange,
   onOpenResize,
+  onOpenKernel,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -78,6 +80,15 @@ export default function Toolbar({
           title="Изменить размер изображения"
         >
           <IconResize /> Размер
+        </button>
+
+        <button
+          className="btn btn-tool"
+          disabled={!hasImage}
+          onClick={onOpenKernel}
+          title="Фильтрация (свёртка с ядром)"
+        >
+          <IconKernel /> Фильтр
         </button>
 
         <div className="toolbar-sep" />
@@ -145,6 +156,22 @@ function IconResize() {
       <rect x="1" y="1" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5"/>
       <rect x="7" y="7" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/>
       <path d="M9 4h3M12 4v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function IconKernel() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="1" y="1" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="6" y="1" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="11" y="1" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="1" y="6" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="6" y="6" width="4" height="4" rx="0.5" fill="currentColor" opacity="0.4"/>
+      <rect x="11" y="6" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="1" y="11" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="6" y="11" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+      <rect x="11" y="11" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
     </svg>
   );
 }

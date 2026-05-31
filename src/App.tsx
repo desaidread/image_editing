@@ -5,6 +5,7 @@ import StatusBar from "./components/StatusBar";
 import ChannelsPanel from "./components/ChannelsPanel";
 import LevelsDialog from "./components/LevelsDialog";
 import ResizeDialog from "./components/ResizeDialog";
+import KernelDialog from "./components/KernelDialog";
 import { useImageStore } from "./hooks/useImageStore";
 import "./App.css";
 
@@ -17,6 +18,7 @@ export default function App() {
     levelsOpen, openLevels, closeLevels, commitLevels,
     viewScale, setViewScale,
     resizeOpen, openResize, closeResize, commitResize,
+    kernelOpen, openKernel, closeKernel, commitKernel,
   } = useImageStore();
 
   const handleCanvasReady = useCallback(
@@ -37,6 +39,7 @@ export default function App() {
         viewScale={viewScale}
         onViewScaleChange={setViewScale}
         onOpenResize={openResize}
+        onOpenKernel={openKernel}
       />
       <div className="app-main">
         <ChannelsPanel
@@ -74,6 +77,16 @@ export default function App() {
           imageData={imageData}
           onApply={commitResize}
           onClose={closeResize}
+        />
+      )}
+
+      {kernelOpen && imageData && (
+        <KernelDialog
+          imageData={imageData}
+          channelCount={channelCount}
+          onApply={commitKernel}
+          onPreview={setPreviewImageData}
+          onClose={closeKernel}
         />
       )}
     </div>
