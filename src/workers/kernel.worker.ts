@@ -1,4 +1,4 @@
-import { applyKernel } from "../lib/kernelFilter";
+import { applyKernelBuffer } from "../lib/kernelFilter";
 import type { ConvolveOptions } from "../lib/kernelFilter";
 
 interface WorkerInput {
@@ -8,14 +8,14 @@ interface WorkerInput {
   opts: ConvolveOptions;
 }
 
+// No ImageData usage here — applyKernelBuffer works with raw typed arrays only.
 self.onmessage = (e: MessageEvent<WorkerInput>) => {
   const { buffer, width, height, opts } = e.data;
   const data = new Uint8ClampedArray(buffer);
-  const imgData = new ImageData(data, width, height);
-  const result = applyKernel(imgData, opts);
+  const result = applyKernelBuffer(data, width, height, opts);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (self as any).postMessage(
-    { buffer: result.data.buffer, width: result.width, height: result.height },
-    [result.data.buffer],
+    { buffer: result.buffer, width, height },
+    [result.buffer],
   );
 };

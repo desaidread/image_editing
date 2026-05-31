@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { PRESETS } from "../lib/kernelFilter";
+import { PRESETS, applyKernel } from "../lib/kernelFilter";
 import type { EdgeMode, ConvolveOptions } from "../lib/kernelFilter";
 import KernelWorker from "../workers/kernel.worker?worker";
 import "./KernelDialog.css";
@@ -12,12 +12,14 @@ interface Props {
   onClose: () => void;
 }
 
-function channelLabels(count: number): string[] {
-  if (count === 1) return ["Серый"];
-  if (count === 2) return ["Серый", "Альфа"];
-  if (count === 3) return ["R", "G", "B"];
-  return ["R", "G", "B", "A"];
-}
+const CHANNEL_LABELS: Record<number, string[]> = {
+  1: ["Серый"],
+  2: ["Серый", "Альфа"],
+  3: ["R", "G", "B"],
+  4: ["R", "G", "B", "A"],
+};
+
+const CHANNEL_COLORS: string[] = ["#e06c75", "#98c379", "#61afef", "#cccccc"];
 
 function toRgbaChannels(checked: boolean[], count: number): boolean[] {
   if (count === 1) return [checked[0], checked[0], checked[0], false];
@@ -26,7 +28,11 @@ function toRgbaChannels(checked: boolean[], count: number): boolean[] {
   return [...checked];
 }
 
-const DEFAULT_PRESET = 0;
+const EDGE_LABELS: Record<EdgeMode, string> = {
+  copy: "Копирование",
+  black: "Чёрный",
+  white: "Белый",
+};
 
 export default function KernelDialog({
   imageData, channelCount, onApply, onPreview, onClose,
@@ -34,20 +40,16 @@ export default function KernelDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const workerRef = useRef<Worker | null>(null);
 
-  const [presetIdx, setPresetIdx] = useState(DEFAULT_PRESET);
-  const [kernelVals, setKernelVals] = useState<string[]>(
-    PRESETS[DEFAULT_PRESET].kernel.map(String)
-  );
-  const [divisorStr, setDivisorStr] = useState(String(PRESETS[DEFAULT_PRESET].divisor));
-  const [channels, setChannels] = useState<boolean[]>(
-    new Array(channelCount).fill(true).map((_, i) =>
-      // don't filter alpha by default
-      channelCount === 4 ? i < 3 : true
-    )
+  const [presetIdx, setPresetIdx] = useState(0);
+  const [kernelVals, setKernelVals] = useState<string[]>(PRESETS[0].kernel.map(String));
+  const [divisorStr, setDivisorStr] = useState(String(PRESETS[0].divisor));
+  const [channels, setChannels] = useState<boolean[]>(() =>
+    Array.from({ length: channelCount }, (_, i) => channelCount === 4 ? i < 3 : true)
   );
   const [edgeMode, setEdgeMode] = useState<EdgeMode>("copy");
   const [previewOn, setPreviewOn] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [workerError, setWorkerError] = useState(false);
 
   useEffect(() => {
     dialogRef.current?.showModal();
@@ -60,26 +62,45 @@ export default function KernelDialog({
     return { kernel, divisor, channels: toRgbaChannels(channels, channelCount), edgeMode };
   }
 
-  const runWorker = useCallback((opts: ConvolveOptions, onDone: (result: ImageData) => void) => {
+  const runTask = useCallback((opts: ConvolveOptions, onDone: (result: ImageData) => void) => {
     workerRef.current?.terminate();
+    workerRef.current = null;
+    setProcessing(true);
+    setWorkerError(false);
+
     const w = new KernelWorker();
     workerRef.current = w;
-    setProcessing(true);
     const buffer = imageData.data.buffer.slice(0);
     w.postMessage({ buffer, width: imageData.width, height: imageData.height, opts }, [buffer]);
+
     w.onmessage = (e) => {
-      const result = new ImageData(new Uint8ClampedArray(e.data.buffer), e.data.width, e.data.height);
+      const result = new ImageData(
+        new Uint8ClampedArray(e.data.buffer), e.data.width, e.data.height,
+      );
       setProcessing(false);
       w.terminate();
       if (workerRef.current === w) workerRef.current = null;
       onDone(result);
     };
+
+    w.onerror = () => {
+      // Worker failed (e.g. ImageData unavailable) — fall back to synchronous processing
+      setWorkerError(true);
+      w.terminate();
+      if (workerRef.current === w) workerRef.current = null;
+      try {
+        const result = applyKernel(imageData, opts);
+        setProcessing(false);
+        onDone(result);
+      } catch {
+        setProcessing(false);
+      }
+    };
   }, [imageData]);
 
-  // Re-run preview whenever kernel/options change while preview is on
   useEffect(() => {
     if (!previewOn) return;
-    runWorker(buildOpts(), onPreview);
+    runTask(buildOpts(), onPreview);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewOn, kernelVals, divisorStr, channels, edgeMode]);
 
@@ -100,14 +121,8 @@ export default function KernelDialog({
     }
   }
 
-  function handleReset() {
-    handlePresetChange(presetIdx);
-  }
-
   function handleApply() {
-    runWorker(buildOpts(), (result) => {
-      onApply(result);
-    });
+    runTask(buildOpts(), onApply);
   }
 
   function handleClose() {
@@ -117,7 +132,7 @@ export default function KernelDialog({
     onClose();
   }
 
-  const labels = channelLabels(channelCount);
+  const labels = CHANNEL_LABELS[channelCount] ?? CHANNEL_LABELS[3];
 
   return (
     <dialog
@@ -126,33 +141,31 @@ export default function KernelDialog({
       onCancel={(e) => { e.preventDefault(); handleClose(); }}
     >
       <div className="kd-header">
-        <span className="kd-title">Фильтр (свёртка)</span>
-        <button className="kd-close" onClick={handleClose}>✕</button>
+        <span className="kd-title">Фильтр — свёртка ядром</span>
+        <button className="kd-close" onClick={handleClose} aria-label="Закрыть">✕</button>
       </div>
 
       <div className="kd-body">
-        {/* Preset selector */}
-        <div className="kd-field">
+        {/* Preset */}
+        <div className="kd-row">
           <label className="kd-label">Пресет</label>
           <select
             className="kd-select"
             value={presetIdx}
-            onChange={(e) => handlePresetChange(parseInt(e.target.value))}
+            onChange={(e) => handlePresetChange(Number(e.target.value))}
           >
-            {PRESETS.map((p, i) => (
-              <option key={i} value={i}>{p.name}</option>
-            ))}
+            {PRESETS.map((p, i) => <option key={i} value={i}>{p.name}</option>)}
           </select>
         </div>
 
-        {/* 3×3 kernel grid */}
-        <div className="kd-kernel-wrap">
+        {/* Kernel grid + divisor */}
+        <div className="kd-kernel-section">
           <div className="kd-kernel-grid">
             {kernelVals.map((v, i) => (
               <input
                 key={i}
                 type="number"
-                className="kd-cell"
+                className={`kd-cell${i === 4 ? " kd-cell-center" : ""}`}
                 value={v}
                 step="any"
                 onChange={(e) => {
@@ -163,72 +176,79 @@ export default function KernelDialog({
               />
             ))}
           </div>
-          <div className="kd-divisor-row">
-            <label className="kd-label">Делитель</label>
+          <div className="kd-divisor-wrap">
+            <span className="kd-divisor-sign">÷</span>
             <input
               type="number"
-              className="kd-cell kd-divisor"
+              className="kd-cell kd-divisor-input"
               value={divisorStr}
               step="any"
+              title="Делитель"
               onChange={(e) => setDivisorStr(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Channel checkboxes */}
-        <div className="kd-section-label">Каналы</div>
-        <div className="kd-channels">
-          {labels.map((lbl, i) => (
-            <label key={i} className="kd-check">
-              <input
-                type="checkbox"
-                checked={channels[i]}
-                onChange={(e) => {
+        {/* Channels */}
+        <div className="kd-section">
+          <span className="kd-section-label">Каналы</span>
+          <div className="kd-chips">
+            {labels.map((lbl, i) => (
+              <button
+                key={i}
+                className={`kd-chip${channels[i] ? " kd-chip-on" : ""}`}
+                style={channels[i] ? { borderColor: CHANNEL_COLORS[i], color: CHANNEL_COLORS[i] } : {}}
+                onClick={() => {
                   const next = [...channels];
-                  next[i] = e.target.checked;
+                  next[i] = !next[i];
                   setChannels(next);
                 }}
-              />
-              {lbl}
-            </label>
-          ))}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Edge handling */}
-        <div className="kd-section-label">Заполнение края</div>
-        <div className="kd-edges">
-          {(["copy", "black", "white"] as EdgeMode[]).map((m) => (
-            <label key={m} className="kd-check">
-              <input
-                type="radio"
-                name="edgeMode"
-                value={m}
-                checked={edgeMode === m}
-                onChange={() => setEdgeMode(m)}
-              />
-              {m === "copy" ? "Копирование" : m === "black" ? "Чёрный" : "Белый"}
-            </label>
-          ))}
+        {/* Edge mode */}
+        <div className="kd-section">
+          <span className="kd-section-label">Заполнение края</span>
+          <div className="kd-seg">
+            {(["copy", "black", "white"] as EdgeMode[]).map((m) => (
+              <button
+                key={m}
+                className={`kd-seg-btn${edgeMode === m ? " kd-seg-active" : ""}`}
+                onClick={() => setEdgeMode(m)}
+              >
+                {EDGE_LABELS[m]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Preview */}
-        <label className="kd-check kd-preview-check">
-          <input
-            type="checkbox"
-            checked={previewOn}
-            onChange={(e) => handleTogglePreview(e.target.checked)}
-          />
-          Предпросмотр
-          {processing && <span className="kd-spinner" />}
-        </label>
+        <div className="kd-preview-row">
+          <label className="kd-toggle-label">
+            <input
+              type="checkbox"
+              checked={previewOn}
+              onChange={(e) => handleTogglePreview(e.target.checked)}
+            />
+            <span>Предпросмотр</span>
+          </label>
+          {processing && <span className="kd-spinner" title="Обработка…" />}
+          {workerError && <span className="kd-warn" title="Worker недоступен, используется синхронный режим">⚠ sync</span>}
+        </div>
       </div>
 
       <div className="kd-footer">
-        <button className="btn btn-secondary" onClick={handleReset}>Сброс</button>
+        <button className="btn btn-secondary" onClick={() => handlePresetChange(presetIdx)}>
+          Сброс
+        </button>
         <div className="kd-footer-right">
           <button className="btn btn-secondary" onClick={handleClose}>Закрыть</button>
           <button className="btn btn-primary" disabled={processing} onClick={handleApply}>
-            Применить
+            {processing ? "…" : "Применить"}
           </button>
         </div>
       </div>
