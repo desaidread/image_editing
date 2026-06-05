@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import {
   type ChannelKey, type LevelsSettings, type ChannelLevels,
-  DEFAULT_CH, DEFAULT_LEVELS, computeHistogram, applyLevels, gammaToNorm, normToGamma,
+  DEFAULT_LEVELS, computeHistogram, applyLevels, gammaToNorm, normToGamma,
 } from "../lib/levels";
 import "./LevelsDialog.css";
 
@@ -186,8 +186,9 @@ export default function LevelsDialog({ imageData, channelCount, onApply, onPrevi
   }, [schedulePreview]);
 
   const handleReset = () => {
-    const next = { ...settings, [activeCh]: { ...DEFAULT_CH } };
-    applyUpdate(next, previewOn);
+    // Reset ALL channels (master + R/G/B/A) to defaults, per spec
+    // ("приводит все значения входных уровней к исходным").
+    applyUpdate(structuredClone(DEFAULT_LEVELS), previewOn);
   };
 
   const handleCancel = () => { onPreview(null); onClose(); };

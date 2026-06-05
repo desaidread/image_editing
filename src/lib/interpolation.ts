@@ -21,6 +21,8 @@ export const INTERP_INFO: Record<InterpolationMethod, InterpInfo> = {
 export const INTERP_METHODS: InterpolationMethod[] = ["bilinear", "nearest"];
 
 export const ZOOM_LEVELS = [12, 25, 33, 50, 67, 75, 100, 150, 200, 300] as const;
+export const ZOOM_MIN = 12;
+export const ZOOM_MAX = 300;
 
 export function resizeImageData(
   src: ImageData,

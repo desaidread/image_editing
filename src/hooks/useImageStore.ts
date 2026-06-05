@@ -111,16 +111,21 @@ export function useImageStore() {
 
   const downloadAs = useCallback(
     (format: "png" | "jpg" | "gb7") => {
-      if (!imageData || !canvasRef?.current) return;
-      const canvas = canvasRef.current;
+      if (!imageData) return;
       const baseName = meta.fileName.replace(/\.[^.]+$/, "") || "image";
       if (format === "gb7") {
         const bytes = encodeGb7(imageData);
         const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "application/octet-stream" });
         triggerDownload(URL.createObjectURL(blob), `${baseName}.gb7`);
       } else {
+        // Export the full-resolution source image — NOT the on-screen canvas,
+        // which is scaled by the zoom slider and may have channels masked out.
+        const off = document.createElement("canvas");
+        off.width = imageData.width;
+        off.height = imageData.height;
+        off.getContext("2d")!.putImageData(imageData, 0, 0);
         const mimeType = format === "jpg" ? "image/jpeg" : "image/png";
-        canvas.toBlob(
+        off.toBlob(
           (blob) => { if (blob) triggerDownload(URL.createObjectURL(blob), `${baseName}.${format}`); },
           mimeType, format === "jpg" ? 0.92 : undefined
         );

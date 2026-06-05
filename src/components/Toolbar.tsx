@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { ActiveTool } from "../hooks/useImageStore";
-import { ZOOM_LEVELS } from "../lib/interpolation";
+import { ZOOM_MIN, ZOOM_MAX } from "../lib/interpolation";
 import "./Toolbar.css";
 
 interface Props {
@@ -95,16 +95,18 @@ export default function Toolbar({
 
         <div className="zoom-group">
           <label className="label">Масштаб:</label>
-          <select
-            className="zoom-select"
+          <input
+            type="range"
+            className="zoom-slider"
+            min={ZOOM_MIN}
+            max={ZOOM_MAX}
+            step={1}
             value={scalePct}
             disabled={!hasImage}
-            onChange={(e) => onViewScaleChange(parseInt(e.target.value) / 100)}
-          >
-            {ZOOM_LEVELS.map(pct => (
-              <option key={pct} value={pct}>{pct}%</option>
-            ))}
-          </select>
+            onChange={(e) => onViewScaleChange(Number(e.target.value) / 100)}
+            title={`${scalePct}%`}
+          />
+          <span className="zoom-readout">{scalePct}%</span>
         </div>
 
         {error && <span className="error-badge" title={error}>Ошибка!</span>}
