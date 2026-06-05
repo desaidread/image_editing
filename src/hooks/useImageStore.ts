@@ -49,6 +49,9 @@ export function useImageStore() {
   // Lab 4
   const [viewScale, setViewScale] = useState(1.0);
   const [resizeOpen, setResizeOpen] = useState(false);
+  // Increments only when a brand-new file is loaded — used to trigger auto-fit
+  // exactly once per load (not on in-place edits like filters/levels/resize).
+  const [loadToken, setLoadToken] = useState(0);
 
   const loadFile = useCallback(async (file: File) => {
     setError(null);
@@ -100,6 +103,7 @@ export function useImageStore() {
       setPreviewImageData(null);
       setLevelsOpen(false);
       setViewScale(1.0);
+      setLoadToken((t) => t + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -186,7 +190,7 @@ export function useImageStore() {
     toggleChannel, setActiveTool, pickPixel,
     previewImageData, setPreviewImageData,
     levelsOpen, openLevels, closeLevels, commitLevels,
-    viewScale, setViewScale,
+    viewScale, setViewScale, loadToken,
     resizeOpen, openResize, closeResize, commitResize,
     kernelOpen, openKernel, closeKernel, commitKernel,
   };

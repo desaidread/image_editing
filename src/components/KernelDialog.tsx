@@ -68,12 +68,40 @@ export default function KernelDialog({
     setProcessing(true);
     setWorkerError(false);
 
-    const w = new KernelWorker();
+    // Synchronous fallback — guarantees the filter is applied even if the
+    // Web Worker fails to construct, fails to load, or never responds.
+    const runSync = () => {
+      try {
+        const result = applyKernel(imageData, opts);
+        setProcessing(false);
+        onDone(result);
+      } catch {
+        setProcessing(false);
+      }
+    };
+
+    let w: Worker;
+    try {
+      w = new KernelWorker();
+    } catch {
+      setWorkerError(true);
+      runSync();
+      return;
+    }
     workerRef.current = w;
-    const buffer = imageData.data.buffer.slice(0);
-    w.postMessage({ buffer, width: imageData.width, height: imageData.height, opts }, [buffer]);
+
+    // Watchdog: if the worker is silently dead (no message, no error),
+    // give up after a short delay and process on the main thread.
+    const watchdog = window.setTimeout(() => {
+      if (workerRef.current !== w) return;
+      setWorkerError(true);
+      w.terminate();
+      workerRef.current = null;
+      runSync();
+    }, 4000);
 
     w.onmessage = (e) => {
+      window.clearTimeout(watchdog);
       const result = new ImageData(
         new Uint8ClampedArray(e.data.buffer), e.data.width, e.data.height,
       );
@@ -84,18 +112,23 @@ export default function KernelDialog({
     };
 
     w.onerror = () => {
-      // Worker failed (e.g. ImageData unavailable) — fall back to synchronous processing
+      window.clearTimeout(watchdog);
       setWorkerError(true);
       w.terminate();
       if (workerRef.current === w) workerRef.current = null;
-      try {
-        const result = applyKernel(imageData, opts);
-        setProcessing(false);
-        onDone(result);
-      } catch {
-        setProcessing(false);
-      }
+      runSync();
     };
+
+    try {
+      const buffer = imageData.data.buffer.slice(0);
+      w.postMessage({ buffer, width: imageData.width, height: imageData.height, opts }, [buffer]);
+    } catch {
+      window.clearTimeout(watchdog);
+      setWorkerError(true);
+      w.terminate();
+      workerRef.current = null;
+      runSync();
+    }
   }, [imageData]);
 
   useEffect(() => {

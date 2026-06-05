@@ -1,8 +1,10 @@
 .canvas-wrapper {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* No align/justify centering here: it would clip the top/left of an
+     overflowing canvas and make those areas unreachable when zoomed in.
+     `margin: auto` on the child centers when it fits and stays fully
+     scrollable when it doesn't. */
   overflow: auto;
   background: var(--bg-canvas);
   background-image:
@@ -14,6 +16,12 @@
   background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
   padding: 24px;
   min-height: 0;
+}
+
+.canvas-wrapper > * {
+  /* Centers when smaller than the viewport, keeps all edges reachable
+     (scrollable) when larger than it. */
+  margin: auto;
 }
 
 .cursor-eyedropper {

@@ -10,6 +10,7 @@ interface Props {
   channelCount: number;
   activeTool: ActiveTool;
   viewScale: number;
+  loadToken: number;
   onCanvasReady: (ref: React.RefObject<HTMLCanvasElement | null>) => void;
   onPixelPick: (x: number, y: number) => void;
   onAutoFit: (scale: number) => void;
@@ -22,6 +23,7 @@ export default function CanvasView({
   channelCount,
   activeTool,
   viewScale,
+  loadToken,
   onCanvasReady,
   onPixelPick,
   onAutoFit,
@@ -34,9 +36,10 @@ export default function CanvasView({
     onCanvasReady(canvasRef);
   }, [onCanvasReady]);
 
-  // Auto-fit when a new image loads
+  // Auto-fit only on a fresh file load (keyed by loadToken), NOT on in-place
+  // edits such as filters/levels/resize — those must preserve the user's zoom.
   useEffect(() => {
-    if (!imageData || !wrapperRef.current) return;
+    if (!imageData || !wrapperRef.current || loadToken === 0) return;
     const wrapper = wrapperRef.current;
     // padding is 24px each side; require ≥50px margin beyond padding
     const availW = wrapper.clientWidth - 48 - 50;
@@ -48,7 +51,8 @@ export default function CanvasView({
       .reverse()
       .find(pct => pct / 100 <= ideal) ?? ZOOM_LEVELS[0];
     onAutoFit(fit / 100);
-  }, [imageData, onAutoFit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadToken]);
 
   // Render: scale image with our interpolation, draw on canvas
   useEffect(() => {

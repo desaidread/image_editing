@@ -16,7 +16,7 @@ export default function App() {
     toggleChannel, setActiveTool, pickPixel,
     previewImageData, setPreviewImageData,
     levelsOpen, openLevels, closeLevels, commitLevels,
-    viewScale, setViewScale,
+    viewScale, setViewScale, loadToken,
     resizeOpen, openResize, closeResize, commitResize,
     kernelOpen, openKernel, closeKernel, commitKernel,
   } = useImageStore();
@@ -55,6 +55,7 @@ export default function App() {
           channelCount={channelCount}
           activeTool={activeTool}
           viewScale={viewScale}
+          loadToken={loadToken}
           onCanvasReady={handleCanvasReady}
           onPixelPick={pickPixel}
           onAutoFit={setViewScale}
